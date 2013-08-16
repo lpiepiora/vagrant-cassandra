@@ -1,0 +1,58 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Vagrantfile API/syntax version. Don't touch unless you know what you're doing!
+VAGRANTFILE_API_VERSION = "2"
+
+servers = {
+  :cassandra1 => '192.168.56.110',
+  :cassandra2 => '192.168.56.112',
+  :cassandra3 => '192.168.56.114'
+}
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  # All Vagrant configuration is done here. The most common configuration
+  # options are documented and commented below. For a complete reference,
+  # please see the online documentation at vagrantup.com.
+   
+  config.vm.box = "precise64"
+  config.vm.box_url = "http://files.vagrantup.com/precise64.box"
+  
+  
+  servers.each_with_index do |(server, ip), idx|
+
+    config.vm.define server do |cassandra|
+      cassandra.vm.network :private_network, ip: ip
+      
+      ## For masterless, mount your file roots file root
+      config.vm.synced_folder "salt/roots/", "/srv/"
+      config.vm.provision :salt do |salt|
+        salt.minion_config = "salt/minion"
+        
+        # Export cassandra hostnames
+        salt.pillar({
+          "cassandra" => {
+            "name" => server,
+            "ip" => ip,
+            "seeds" => servers.values.join(",")
+          }
+        })
+
+        salt.run_highstate = true
+        # Uncomment the next line to get more information about what Salt is doing
+        salt.verbose = true
+
+        config.vm.provider :virtualbox do |vb|
+          #   # Don't boot with headless mode
+          #   vb.gui = true
+          #
+          # Use VBoxManage to customize the VM. For example to change memory:
+          vb.customize ["modifyvm", :id, "--memory", "2048"]
+        end
+      
+      end
+    end
+    
+  end
+  
+end
